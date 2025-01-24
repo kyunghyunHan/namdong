@@ -1,0 +1,8 @@
+[package]
+name = "namdong"
+version = "0.1.0"
+edition = "2024"
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winbase"] }
+[dependencies]
+eframe = "0.29.1"
