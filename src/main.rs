@@ -185,16 +185,23 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
  
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
     let base_url = "http://www.dongkun.com/ko/sub/product/view.asp?idx=";
- 
-    // 제품 ID 목록
-    let ids = vec![343, 356, 6, 7, 8, 11, 12, 9];
     
-    for id in ids {
-        let url = format!("{}{}&s_cate=1010", base_url, id);
-        driver.goto(&url).await?;
-        sleep(Duration::from_secs(2)).await;
+    let url = format!("{}{}", base_url, "");  // 제품 ID 없이 기본 URL로 방문
+    
+    driver.goto(&url).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await; // 페이지 로딩 대기
+    
+    // `ul` 요소 찾기
+    let ul_elements = driver.find_elements(By::Css("ul")).await?;
+    
+    if let Some(ul_element) = ul_elements.first() {
+        // `ul` 안에 있는 `li` 요소 개수 구하기
+        let li_elements = driver.find_elements(By::Css("ul.clearfix > li:not(.off)")).await?;
+        println!("활성화된 제품 수: {}", li_elements.len());
+    } else {
+        println!("ul 요소를 찾을 수 없습니다.");
     }
- 
+
     driver.quit().await?;
     Ok(())
- }
+}
