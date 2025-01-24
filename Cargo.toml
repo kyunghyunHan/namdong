@@ -6,3 +6,6 @@ edition = "2024"
 winapi = { version = "0.3", features = ["winbase"] }
 [dependencies]
 eframe = "0.29.1"
+thirtyfour = "0.32.0-rc.9"
+tokio = { version = "1", features = ["full"] }
+dotenv = "0.15"
