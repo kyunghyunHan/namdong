@@ -9,7 +9,7 @@ use dotenv::dotenv;
 use std::env;
 
 
-const WINDOW_DRIVER: &str = "./driver/chromedriver";
+const WINDOW_DRIVER: &str = "./driver/chromedriver.exe";
 const MAC_DRIVER: &str = "./driver/chromedriver";
 
 const TYPE: &str = "WINDOW";
