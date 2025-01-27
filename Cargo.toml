@@ -12,3 +12,4 @@ dotenv = "0.15"
 calamine = "0.21.1"
 xlsxwriter = "0.6.1"
 
+reqwest = "0.12.12"

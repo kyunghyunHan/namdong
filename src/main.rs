@@ -5,10 +5,12 @@ use dotenv::dotenv;
 use eframe::egui;
 use std::env;
 use std::error::Error;
+use std::fs;
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
 use thirtyfour::prelude::*;
+use xlsxwriter::*;
 use tokio::process::Command;
 use tokio::time::sleep; // Path를 사용하여 디렉토리 경로 조작
 const WINDOW_DRIVER: &str = "./driver/chromedriver.exe";
@@ -177,10 +179,25 @@ impl eframe::App for MyApp {
         });
     }
 }
+
 pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     start_chromedriver().await?;
     let mut caps = DesiredCapabilities::chrome();
     caps.set_no_sandbox()?;
+
+    // Excel 워크북 생성
+    let workbook = Workbook::new("products.xlsx")?;
+    let mut sheet = workbook.add_worksheet(None)?;
+
+    // 헤더 작성
+    sheet.write_string(0, 0, "분류", None)?;
+    sheet.write_string(0, 1, "제목", None)?;
+    sheet.write_string(0, 2, "제품특징", None)?;
+    sheet.write_string(0, 3, "사용장소", None)?;
+    sheet.write_string(0, 4, "사진1", None)?;
+    sheet.write_string(0, 5, "사진2", None)?;
+
+    let mut row = 1; // 데이터는 1행부터 시작
 
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
     let domain = "http://www.dongkun.com";
@@ -244,7 +261,6 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                     if let Some(query) = href.split("?").nth(1) {
                         if let Ok(product_elem) = product.find_element(By::Css("div.txt > p")).await {
                             if let Ok(product_name) = product_elem.text().await {
-                                // 제품 상세 페이지 URL 구성
                                 let full_href = format!("{}/view.asp?{}", base_url, query);
                                 product_info.push((full_href, product_name.to_string()));
                             }
@@ -262,12 +278,130 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 driver.goto(prod_href).await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
+                // 상세 페이지에서 정보 수집
+                let mut category = String::new();
+                let mut name = String::new();
+                if let Ok(title_div) = driver.find_element(By::Css(".title")).await {
+                    if let Ok(span) = title_div.find_element(By::Tag("span")).await {
+                        if let Ok(text) = span.text().await {
+                            category = text;
+                        }
+                    }
+                    if let Ok(strong) = title_div.find_element(By::Tag("strong")).await {
+                        if let Ok(text) = strong.text().await {
+                            name = text;
+                        }
+                    }
+                }
+
+                let mut features = String::new();
+                let mut usage = String::new();
+                if let Ok(info_div) = driver.find_element(By::Css(".info")).await {
+                    let dls = info_div.find_elements(By::Tag("dl")).await?;
+                    for dl in dls {
+                        if let Ok(dt) = dl.find_element(By::Tag("dt")).await {
+                            if let Ok(text) = dt.text().await {
+                                if text.contains("제품특징") {
+                                    if let Ok(dd) = dl.find_element(By::Tag("dd")).await {
+                                        if let Ok(feature_text) = dd.text().await {
+                                            features = feature_text;
+                                        }
+                                    }
+                                } else if text.contains("제품 사용장소") {
+                                    if let Ok(dd) = dl.find_element(By::Tag("dd")).await {
+                                        if let Ok(usage_text) = dd.text().await {
+                                            usage = usage_text;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 이미지 다운로드
+                let img_folder = format!("downloads/{}/{}", category, name);
+                fs::create_dir_all(&img_folder)?;
+
+                let mut image1_path = String::new();
+                let mut image2_path = String::new();
+
+                // 첫 번째 이미지
+                if let Ok(main_img) = driver.find_element(By::Css(".img_box .img img")).await {
+                    if let Ok(Some(src)) = main_img.get_attribute("src").await {
+                        let full_url = format!("{}{}", domain, src);
+                        let file_name = src.split('/').last().unwrap_or("image1.jpg");
+                        let save_path = format!("{}/1_{}", img_folder, file_name);
+                        
+                        download_image(&full_url, &save_path).await?;
+                        image1_path = save_path;
+                    }
+                }
+
+                // 두 번째 이미지
+                if let Ok(detail_img) = driver.find_element(By::Css(".detail .txt_area img")).await {
+                    if let Ok(Some(src)) = detail_img.get_attribute("src").await {
+                        let full_url = format!("{}{}", domain, src);
+                        let file_name = src.split('/').last().unwrap_or("image2.jpg");
+                        let save_path = format!("{}/2_{}", img_folder, file_name);
+                        
+                        download_image(&full_url, &save_path).await?;
+                        image2_path = save_path;
+                    }
+                }
+
+                // 엑셀에 데이터 저장
+                sheet.write_string(row, 0, &category, None)?;
+                sheet.write_string(row, 1, &name, None)?;
+                sheet.write_string(row, 2, &features, None)?;
+                sheet.write_string(row, 3, &usage, None)?;
+                sheet.write_string(row, 4, &image1_path, None)?;
+                sheet.write_string(row, 5, &image2_path, None)?;
+
+                row += 1;
+
                 driver.goto(sub_href).await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         }
     }
+    workbook.close()?;
 
     driver.quit().await?;
+    Ok(())
+}
+
+// fn save_to_excel(product: &ProductInfo, file_path: &str) -> Result<(), Box<dyn Error>> {
+//     let mut workbook = if Path::new(file_path).exists() {
+//         Workbook::open(file_path)?
+//     } else {
+//         Workbook::create(file_path)?
+//     };
+
+//     let sheet = workbook.worksheet_mut("Products")?;
+
+//     // 헤더 추가 (첫 번째 행이 비어있는 경우)
+//     if sheet.is_empty() {
+//         sheet.write_row(&["분류", "제목", "제품특징", "사용장소", "사진1", "사진2"])?;
+//     }
+
+//     // 데이터 추가
+//     let row = sheet.rows() + 1;
+//     sheet.write_row_at(row, &[
+//         &product.category,
+//         &product.name,
+//         &product.features,
+//         &product.usage,
+//         &product.image1,
+//         &product.image2,
+//     ])?;
+
+//     workbook.save(file_path)?;
+//     Ok(())
+// }
+async fn download_image(url: &str, path: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let response = reqwest::get(url).await?;
+    let bytes = response.bytes().await?;
+    fs::write(path, bytes)?;
     Ok(())
 }
