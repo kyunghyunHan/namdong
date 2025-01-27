@@ -177,33 +177,53 @@ impl eframe::App for MyApp {
         });
     }
 }
-// 새로운 함수 추가
 pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     start_chromedriver().await?;
     let mut caps = DesiredCapabilities::chrome();
     caps.set_no_sandbox()?;
 
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
-    let base_url = "http://www.dongkun.com/ko/sub/product/list.asp?s_cate=10";
+    let base_url = "http://www.dongkun.com/ko/sub/product";
+    let list_url = format!("{}/list.asp?s_cate=10", base_url);
 
-    let url = format!("{}{}", base_url, ""); // 제품 ID 없이 기본 URL로 방문
+    driver.goto(&list_url).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
-    driver.goto(&url).await?;
-    tokio::time::sleep(Duration::from_secs(2)).await; // 페이지 로딩 대기
+    let product_links = driver
+        .find_elements(By::Css(
+            "ul.clearfix > li > a[href*='idx=']:not([href$='view.asp'])",
+        ))
+        .await?;
 
-    // `ul` 요소 찾기
-    let ul_elements = driver.find_elements(By::Css("ul")).await?;
+    println!("총 제품 수: {}", product_links.len());
 
-    if let Some(ul_element) = ul_elements.first() {
-        // `ul` 안에 있는 `li` 요소 개수 구하기
-        let li_elements = driver
-            .find_elements(By::Css("ul.clearfix > li > a[href^='view.asp?idx=']"))
-            .await?;
-        let li_elements = driver.find_elements(By::Css("ul.clearfix > li > a[href*='idx=']:not([href$='view.asp'])")).await?;
+    // 각 제품의 href 속성에서 파라미터 추출
+    let mut product_params = Vec::new();
+    for product in &product_links {
+        if let Ok(Some(href)) = product.get_attribute("href").await {
+            // href를 String으로 변환하여 소유권 문제 해결
+            let href = href.to_string();
+            if let Some(query) = href.split("?").nth(1) {
+                product_params.push(query.to_string());  // query도 String으로 변환
+            }
+        }
+    }
 
-        println!("활성화된 제품 수: {}", li_elements.len());
-    } else {
-        println!("ul 요소를 찾을 수 없습니다.");
+    // 각 제품 페이지 방문
+    for (index, params) in product_params.iter().enumerate() {
+        println!("\n제품 {}/{} 방문중...", index + 1, product_params.len());
+        
+        // 전체 URL 구성
+        let full_url = format!("{}/view.asp?{}", base_url, params);
+        println!("방문 URL: {}", full_url);
+        
+        // 제품 상세 페이지로 이동
+        driver.goto(&full_url).await?;
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        // 리스트 페이지로 돌아가기
+        driver.goto(&list_url).await?;
+        tokio::time::sleep(Duration::from_secs(2)).await;
     }
 
     driver.quit().await?;
