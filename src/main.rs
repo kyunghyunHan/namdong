@@ -185,79 +185,86 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
     let domain = "http://www.dongkun.com";
     let base_url = format!("{}/ko/sub/product", domain);
-    
-    // 먼저 카테고리 목록 페이지로 이동
-    let list_url = format!("{}/list.asp?s_cate=10", base_url);
-    driver.goto(&list_url).await?;
-    tokio::time::sleep(Duration::from_secs(2)).await;
 
-    // 모든 카테고리 링크 수집
-    let categories = driver
-        .find_elements(By::Css(".category_li > ul > li > a"))
+    let main_url = format!("{}/list.asp", base_url);
+    driver.goto(&main_url).await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    let main_categories = driver
+        .find_elements(By::Css(".depth2.menu2 > li > a"))
         .await?;
 
-    let mut category_info = Vec::new();
-    for category in &categories {
+    let mut main_category_info = Vec::new();
+    for category in &main_categories {
         if let (Ok(Some(href)), Ok(name)) = (category.get_attribute("href").await, category.text().await) {
-            // href가 상대 경로로 시작하면 도메인을 앞에 추가
             let full_href = if href.starts_with("/") {
                 format!("{}{}", domain, href)
             } else {
                 href.to_string()
             };
-            category_info.push((full_href, name.to_string()));
+            main_category_info.push((full_href, name.to_string()));
         }
     }
 
-
-    // 각 카테고리 순회
-    for (index, (category_href, category_name)) in category_info.iter().enumerate() {
-        println!("\n=== 카테고리 {}/{}: {} ===", index + 1, category_info.len(), category_name);
+    for (main_index, (main_href, main_name)) in main_category_info.iter().enumerate() {
+        println!("\n=== 메인 카테고리 {}/{}: {} ===", main_index + 1, main_category_info.len(), main_name);
         
-        // 카테고리 페이지로 이동
-        driver.goto(category_href).await?;
+        driver.goto(main_href).await?;
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        // 현재 카테고리의 제품 링크 수집
-        let product_links = driver
-            .find_elements(By::Css(
-                "ul.clearfix > li > a[href*='idx=']:not([href$='view.asp'])",
-            ))
+        let sub_categories = driver
+            .find_elements(By::Css(".category_li > ul > li > a"))
             .await?;
 
-        println!("카테고리 내 제품 수: {}", product_links.len());
+        let mut sub_category_info = Vec::new();
+        for category in &sub_categories {
+            if let (Ok(Some(href)), Ok(name)) = (category.get_attribute("href").await, category.text().await) {
+                let full_href = if href.starts_with("/") {
+                    format!("{}{}", domain, href)
+                } else {
+                    href.to_string()
+                };
+                sub_category_info.push((full_href, name.to_string()));
+            }
+        }
 
-        // 각 제품의 href 속성에서 파라미터 추출
-        let mut product_params = Vec::new();
-        for product in &product_links {
-            if let Ok(Some(href)) = product.get_attribute("href").await {
-                let href = href.to_string();
-                if let Some(query) = href.split("?").nth(1) {
-                    // 제품명도 함께 저장
-                    if let Ok(product_elem) = product.find_element(By::Css("div.txt > p")).await {
-                        if let Ok(product_name) = product_elem.text().await {
-                            product_params.push((query.to_string(), product_name.to_string()));
+        for (sub_index, (sub_href, sub_name)) in sub_category_info.iter().enumerate() {
+            println!("\n-- 서브 카테고리 {}/{}: {} --", sub_index + 1, sub_category_info.len(), sub_name);
+            
+            driver.goto(sub_href).await?;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            let products = driver
+                .find_elements(By::Css("ul.clearfix > li > a"))
+                .await?;
+
+            let mut product_info = Vec::new();
+            for product in &products {
+                if let Ok(Some(href)) = product.get_attribute("href").await {
+                    if let Some(query) = href.split("?").nth(1) {
+                        if let Ok(product_elem) = product.find_element(By::Css("div.txt > p")).await {
+                            if let Ok(product_name) = product_elem.text().await {
+                                // 제품 상세 페이지 URL 구성
+                                let full_href = format!("{}/view.asp?{}", base_url, query);
+                                product_info.push((full_href, product_name.to_string()));
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // 각 제품 페이지 방문
-        for (prod_index, (params, product_name)) in product_params.iter().enumerate() {
-            println!("\n제품 {}/{}: {}", prod_index + 1, product_params.len(), product_name);
-            
-            // 전체 URL 구성
-            let full_url = format!("{}/view.asp?{}", base_url, params);
-            println!("방문 URL: {}", full_url);
-            
-            // 제품 상세 페이지로 이동
-            driver.goto(&full_url).await?;
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            println!("제품 수: {}", product_info.len());
 
-            // 카테고리 리스트로 돌아가기
-            driver.goto(category_href).await?;
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            for (prod_index, (prod_href, prod_name)) in product_info.iter().enumerate() {
+                println!("제품 {}/{}: {}", prod_index + 1, product_info.len(), prod_name);
+                println!("URL: {}", prod_href);
+                
+                driver.goto(prod_href).await?;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+
+                driver.goto(sub_href).await?;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
         }
     }
 
