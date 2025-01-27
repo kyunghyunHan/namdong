@@ -183,47 +183,82 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     caps.set_no_sandbox()?;
 
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
-    let base_url = "http://www.dongkun.com/ko/sub/product";
+    let domain = "http://www.dongkun.com";
+    let base_url = format!("{}/ko/sub/product", domain);
+    
+    // 먼저 카테고리 목록 페이지로 이동
     let list_url = format!("{}/list.asp?s_cate=10", base_url);
-
     driver.goto(&list_url).await?;
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let product_links = driver
-        .find_elements(By::Css(
-            "ul.clearfix > li > a[href*='idx=']:not([href$='view.asp'])",
-        ))
+    // 모든 카테고리 링크 수집
+    let categories = driver
+        .find_elements(By::Css(".category_li > ul > li > a"))
         .await?;
 
-    println!("총 제품 수: {}", product_links.len());
-
-    // 각 제품의 href 속성에서 파라미터 추출
-    let mut product_params = Vec::new();
-    for product in &product_links {
-        if let Ok(Some(href)) = product.get_attribute("href").await {
-            // href를 String으로 변환하여 소유권 문제 해결
-            let href = href.to_string();
-            if let Some(query) = href.split("?").nth(1) {
-                product_params.push(query.to_string());  // query도 String으로 변환
-            }
+    let mut category_info = Vec::new();
+    for category in &categories {
+        if let (Ok(Some(href)), Ok(name)) = (category.get_attribute("href").await, category.text().await) {
+            // href가 상대 경로로 시작하면 도메인을 앞에 추가
+            let full_href = if href.starts_with("/") {
+                format!("{}{}", domain, href)
+            } else {
+                href.to_string()
+            };
+            category_info.push((full_href, name.to_string()));
         }
     }
 
-    // 각 제품 페이지 방문
-    for (index, params) in product_params.iter().enumerate() {
-        println!("\n제품 {}/{} 방문중...", index + 1, product_params.len());
-        
-        // 전체 URL 구성
-        let full_url = format!("{}/view.asp?{}", base_url, params);
-        println!("방문 URL: {}", full_url);
-        
-        // 제품 상세 페이지로 이동
-        driver.goto(&full_url).await?;
-        tokio::time::sleep(Duration::from_secs(2)).await;
 
-        // 리스트 페이지로 돌아가기
-        driver.goto(&list_url).await?;
-        tokio::time::sleep(Duration::from_secs(2)).await;
+    // 각 카테고리 순회
+    for (index, (category_href, category_name)) in category_info.iter().enumerate() {
+        println!("\n=== 카테고리 {}/{}: {} ===", index + 1, category_info.len(), category_name);
+        
+        // 카테고리 페이지로 이동
+        driver.goto(category_href).await?;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // 현재 카테고리의 제품 링크 수집
+        let product_links = driver
+            .find_elements(By::Css(
+                "ul.clearfix > li > a[href*='idx=']:not([href$='view.asp'])",
+            ))
+            .await?;
+
+        println!("카테고리 내 제품 수: {}", product_links.len());
+
+        // 각 제품의 href 속성에서 파라미터 추출
+        let mut product_params = Vec::new();
+        for product in &product_links {
+            if let Ok(Some(href)) = product.get_attribute("href").await {
+                let href = href.to_string();
+                if let Some(query) = href.split("?").nth(1) {
+                    // 제품명도 함께 저장
+                    if let Ok(product_elem) = product.find_element(By::Css("div.txt > p")).await {
+                        if let Ok(product_name) = product_elem.text().await {
+                            product_params.push((query.to_string(), product_name.to_string()));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 각 제품 페이지 방문
+        for (prod_index, (params, product_name)) in product_params.iter().enumerate() {
+            println!("\n제품 {}/{}: {}", prod_index + 1, product_params.len(), product_name);
+            
+            // 전체 URL 구성
+            let full_url = format!("{}/view.asp?{}", base_url, params);
+            println!("방문 URL: {}", full_url);
+            
+            // 제품 상세 페이지로 이동
+            driver.goto(&full_url).await?;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+
+            // 카테고리 리스트로 돌아가기
+            driver.goto(category_href).await?;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
     }
 
     driver.quit().await?;
