@@ -182,21 +182,25 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     start_chromedriver().await?;
     let mut caps = DesiredCapabilities::chrome();
     caps.set_no_sandbox()?;
- 
+
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
-    let base_url = "http://www.dongkun.com/ko/sub/product/view.asp?idx=";
-    
-    let url = format!("{}{}", base_url, "");  // 제품 ID 없이 기본 URL로 방문
-    
+    let base_url = "http://www.dongkun.com/ko/sub/product/list.asp?s_cate=10";
+
+    let url = format!("{}{}", base_url, ""); // 제품 ID 없이 기본 URL로 방문
+
     driver.goto(&url).await?;
     tokio::time::sleep(Duration::from_secs(2)).await; // 페이지 로딩 대기
-    
+
     // `ul` 요소 찾기
     let ul_elements = driver.find_elements(By::Css("ul")).await?;
-    
+
     if let Some(ul_element) = ul_elements.first() {
         // `ul` 안에 있는 `li` 요소 개수 구하기
-        let li_elements = driver.find_elements(By::Css("ul.clearfix > li:not(.off)")).await?;
+        let li_elements = driver
+            .find_elements(By::Css("ul.clearfix > li > a[href^='view.asp?idx=']"))
+            .await?;
+        let li_elements = driver.find_elements(By::Css("ul.clearfix > li > a[href*='idx=']:not([href$='view.asp'])")).await?;
+
         println!("활성화된 제품 수: {}", li_elements.len());
     } else {
         println!("ul 요소를 찾을 수 없습니다.");
