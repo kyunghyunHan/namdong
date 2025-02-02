@@ -7,12 +7,13 @@ use std::env;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+
 use std::thread;
 use std::time::Duration;
 use thirtyfour::prelude::*;
-use xlsxwriter::*;
 use tokio::process::Command;
-use tokio::time::sleep; // Path를 사용하여 디렉토리 경로 조작
+use tokio::time::sleep;
+use xlsxwriter::*; // Path를 사용하여 디렉토리 경로 조작
 const WINDOW_DRIVER: &str = "./driver/chromedriver.exe";
 const MAC_DRIVER: &str = "./driver/chromedriver";
 
@@ -108,7 +109,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
             if let Ok(current_dir) = env::current_dir() {
                 println!("Current directory: {}", current_dir.display());
             }
-            let path = "./test.xlsx"; // 현재 디렉토리의 파일 지정
+            let path = "./products.xlsx"; // 현재 디렉토리의 파일 지정
 
             let mut workbook: Xlsx<_> = open_workbook(path)?;
             if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
@@ -144,7 +145,7 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            if ui.button("Start Web Automation").clicked() {
+            if ui.button("Upload Data").clicked() {
                 self.shown1 = !self.shown1;
                 if self.shown1 {
                     self.web_status = "Starting...".to_string();
@@ -163,7 +164,7 @@ impl eframe::App for MyApp {
 
             ui.add_space(20.0);
 
-            if ui.button("Go to Dongkun").clicked() {
+            if ui.button("Saving Data").clicked() {
                 self.shown2 = !self.shown2;
                 if self.shown2 {
                     thread::spawn(|| {
@@ -185,8 +186,8 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut caps = DesiredCapabilities::chrome();
     caps.set_no_sandbox()?;
 
-    // Excel 워크북 생성
-    let workbook = Workbook::new("products.xlsx")?;
+    fs::create_dir_all("./data")?;
+    let workbook = Workbook::new("./data/products.xlsx")?;
     let mut sheet = workbook.add_worksheet(None)?;
 
     // 헤더 작성
@@ -213,7 +214,9 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mut main_category_info = Vec::new();
     for category in &main_categories {
-        if let (Ok(Some(href)), Ok(name)) = (category.get_attribute("href").await, category.text().await) {
+        if let (Ok(Some(href)), Ok(name)) =
+            (category.get_attribute("href").await, category.text().await)
+        {
             let full_href = if href.starts_with("/") {
                 format!("{}{}", domain, href)
             } else {
@@ -224,8 +227,13 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     for (main_index, (main_href, main_name)) in main_category_info.iter().enumerate() {
-        println!("\n=== 메인 카테고리 {}/{}: {} ===", main_index + 1, main_category_info.len(), main_name);
-        
+        println!(
+            "\n=== 메인 카테고리 {}/{}: {} ===",
+            main_index + 1,
+            main_category_info.len(),
+            main_name
+        );
+
         driver.goto(main_href).await?;
         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -235,7 +243,9 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
         let mut sub_category_info = Vec::new();
         for category in &sub_categories {
-            if let (Ok(Some(href)), Ok(name)) = (category.get_attribute("href").await, category.text().await) {
+            if let (Ok(Some(href)), Ok(name)) =
+                (category.get_attribute("href").await, category.text().await)
+            {
                 let full_href = if href.starts_with("/") {
                     format!("{}{}", domain, href)
                 } else {
@@ -246,8 +256,13 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
 
         for (sub_index, (sub_href, sub_name)) in sub_category_info.iter().enumerate() {
-            println!("\n-- 서브 카테고리 {}/{}: {} --", sub_index + 1, sub_category_info.len(), sub_name);
-            
+            println!(
+                "\n-- 서브 카테고리 {}/{}: {} --",
+                sub_index + 1,
+                sub_category_info.len(),
+                sub_name
+            );
+
             driver.goto(sub_href).await?;
             tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -259,7 +274,8 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
             for product in &products {
                 if let Ok(Some(href)) = product.get_attribute("href").await {
                     if let Some(query) = href.split("?").nth(1) {
-                        if let Ok(product_elem) = product.find_element(By::Css("div.txt > p")).await {
+                        if let Ok(product_elem) = product.find_element(By::Css("div.txt > p")).await
+                        {
                             if let Ok(product_name) = product_elem.text().await {
                                 let full_href = format!("{}/view.asp?{}", base_url, query);
                                 product_info.push((full_href, product_name.to_string()));
@@ -272,9 +288,14 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
             println!("제품 수: {}", product_info.len());
 
             for (prod_index, (prod_href, prod_name)) in product_info.iter().enumerate() {
-                println!("제품 {}/{}: {}", prod_index + 1, product_info.len(), prod_name);
+                println!(
+                    "제품 {}/{}: {}",
+                    prod_index + 1,
+                    product_info.len(),
+                    prod_name
+                );
                 println!("URL: {}", prod_href);
-                
+
                 driver.goto(prod_href).await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -332,19 +353,20 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         let full_url = format!("{}{}", domain, src);
                         let file_name = src.split('/').last().unwrap_or("image1.jpg");
                         let save_path = format!("{}/1_{}", img_folder, file_name);
-                        
+
                         download_image(&full_url, &save_path).await?;
                         image1_path = save_path;
                     }
                 }
 
                 // 두 번째 이미지
-                if let Ok(detail_img) = driver.find_element(By::Css(".detail .txt_area img")).await {
+                if let Ok(detail_img) = driver.find_element(By::Css(".detail .txt_area img")).await
+                {
                     if let Ok(Some(src)) = detail_img.get_attribute("src").await {
                         let full_url = format!("{}{}", domain, src);
                         let file_name = src.split('/').last().unwrap_or("image2.jpg");
                         let save_path = format!("{}/2_{}", img_folder, file_name);
-                        
+
                         download_image(&full_url, &save_path).await?;
                         image2_path = save_path;
                     }
