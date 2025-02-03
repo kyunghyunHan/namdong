@@ -109,17 +109,120 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
             if let Ok(current_dir) = env::current_dir() {
                 println!("Current directory: {}", current_dir.display());
             }
-            let path = "./products.xlsx"; // 현재 디렉토리의 파일 지정
+            let path = "./data/products.xlsx"; // 현재 디렉토리의 파일 지정
 
             let mut workbook: Xlsx<_> = open_workbook(path)?;
+
             if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
-                println!("총 제품 수: {}", range.height() - 1);
+                // 각 제품에 대해 처리
                 for row_idx in 1..range.height() {
-                    println!(
-                        "제품 {}: {:?}",
-                        row_idx,
-                        range.get_value((row_idx as u32, 0))
-                    );
+                    // 카테고리 선택
+                    let category = range
+                        .get_value((row_idx as u32, 0)) // 분류 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
+                    println!("이거다{}",category);
+                    // 카테고리 선택 - select 요소의 options를 찾아서 매칭되는 텍스트의 option을 선택
+                    let select = driver.find_element(By::Id("ca_name")).await?;
+                    let options = select.find_elements(By::Tag("option")).await?;
+
+                    for option in options {
+                        let option_text = option.text().await?;
+                        println!("{}",option_text);
+
+                        if option_text == category {
+                            option.click().await?;
+                            break;
+                        }
+                    }
+
+                    // 제목 입력
+                    // let title = range
+                    //     .get_value((row_idx as u32, 1)) // 제목 컬럼
+                    //     .map(|v| v.to_string())
+                    //     .unwrap_or_default();
+
+                    // driver
+                    //     .find_element(By::Id("wr_subject"))
+                    //     .await?
+                    //     .send_keys(&title)
+                    //     .await?;
+
+                    // // 제품 특징 입력
+                    // let features = range
+                    //     .get_value((row_idx as u32, 2)) // 특징 컬럼
+                    //     .map(|v| v.to_string())
+                    //     .unwrap_or_default();
+
+                    // driver
+                    //     .find_element(By::Id("wr_8"))
+                    //     .await?
+                    //     .send_keys(&features)
+                    //     .await?;
+
+                    // // 사용장소 입력
+                    // let usage = range
+                    //     .get_value((row_idx as u32, 3)) // 사용장소 컬럼
+                    //     .map(|v| v.to_string())
+                    //     .unwrap_or_default();
+
+                    // driver
+                    //     .find_element(By::Id("wr_9"))
+                    //     .await?
+                    //     .send_keys(&usage)
+                    //     .await?;
+
+                    // // 파일 업로드 (사진1)
+                    // let photo1_path = range
+                    //     .get_value((row_idx as u32, 4)) // 사진1 경로 컬럼
+                    //     .map(|v| v.to_string())
+                    //     .unwrap_or_default();
+
+                    // if !photo1_path.is_empty() {
+                    //     driver
+                    //         .find_element(By::Id("bf_file_1"))
+                    //         .await?
+                    //         .send_keys(&photo1_path)
+                    //         .await?;
+                    // }
+
+                    // // 사진2 업로드 (에디터 내부)
+                    // let photo2_path = range
+                    //     .get_value((row_idx as u32, 5)) // 사진2 경로 컬럼
+                    //     .map(|v| v.to_string())
+                    //     .unwrap_or_default();
+
+                    // if !photo2_path.is_empty() {
+                    //     // iframe으로 전환
+                    //     let editor_frame = driver
+                    //         .find_element(By::Css("iframe[src*='SmartEditor2Skin.html']"))
+                    //         .await?;
+                    //     driver.switch_to().parent_frame().await?;
+
+                    //     // 사진 버튼 클릭
+                    //     driver
+                    //         .find_element(By::Css(".se2_photo"))
+                    //         .await?
+                    //         .click()
+                    //         .await?;
+
+                    //     // 기본 프레임으로 돌아가기
+                    //     driver.switch_to().default_content().await?;
+
+                    //     // 파일 업로드 다이얼로그 처리
+                    //     // Note: 실제 구현은 사이트의 파일 업로드 UI에 따라 달라질 수 있습니다
+                    //     sleep(Duration::from_secs(1)).await;
+                    // }
+
+                    // // 작성완료 버튼 클릭
+                    // driver
+                    //     .find_element(By::Id("btn_submit"))
+                    //     .await?
+                    //     .click()
+                    //     .await?;
+
+                    // 다음 제품 입력을 위해 대기
+                    sleep(Duration::from_secs(10)).await;
                 }
             }
         }
