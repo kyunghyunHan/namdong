@@ -121,6 +121,11 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .get_value((row_idx as u32, 0)) // 분류 컬럼
                         .map(|v| v.to_string())
                         .unwrap_or_default();
+
+                    let sub_category = range
+                        .get_value((row_idx as u32, 1)) // 분류 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
                     println!("이거다{}", category);
                     // 카테고리 선택 - select 요소의 options를 찾아서 매칭되는 텍스트의 option을 선택
                     let select = driver.find_element(By::Id("ca_name")).await?;
@@ -135,43 +140,76 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             break;
                         }
                     }
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    let select = driver.find_element(By::Id("wr_1")).await?;
+                    let options = select.find_elements(By::Tag("option")).await?;
+                    for option in options {
+                        let option_text = option.text().await?;
+                        println!("{}", option_text);
+
+                        if option_text == sub_category {
+                            option.click().await?;
+                            break;
+                        }
+                    }
 
                     // 제목 입력
-                    // let title = range
-                    //     .get_value((row_idx as u32, 1)) // 제목 컬럼
-                    //     .map(|v| v.to_string())
-                    //     .unwrap_or_default();
+                    let title = range
+                        .get_value((row_idx as u32, 2)) // 제목 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
 
-                    // driver
-                    //     .find_element(By::Id("wr_subject"))
-                    //     .await?
-                    //     .send_keys(&title)
-                    //     .await?;
+                    driver
+                        .find_element(By::Id("wr_subject"))
+                        .await?
+                        .send_keys(&title)
+                        .await?;
 
-                    // // 제품 특징 입력
-                    // let features = range
-                    //     .get_value((row_idx as u32, 2)) // 특징 컬럼
-                    //     .map(|v| v.to_string())
-                    //     .unwrap_or_default();
+                    // 제품 특징 입력
+                    let features = range
+                        .get_value((row_idx as u32, 3)) // 특징 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
 
-                    // driver
-                    //     .find_element(By::Id("wr_8"))
-                    //     .await?
-                    //     .send_keys(&features)
-                    //     .await?;
+                    driver
+                        .find_element(By::Id("wr_8"))
+                        .await?
+                        .send_keys(&features)
+                        .await?;
 
-                    // // 사용장소 입력
-                    // let usage = range
-                    //     .get_value((row_idx as u32, 3)) // 사용장소 컬럼
-                    //     .map(|v| v.to_string())
-                    //     .unwrap_or_default();
+                    // 사용장소 입력
+                    let usage = range
+                        .get_value((row_idx as u32, 4)) // 사용장소 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
 
-                    // driver
-                    //     .find_element(By::Id("wr_9"))
-                    //     .await?
-                    //     .send_keys(&usage)
-                    //     .await?;
+                    driver
+                        .find_element(By::Id("wr_9"))
+                        .await?
+                        .send_keys(&usage)
+                        .await?;
+                    let thumbnail_path = range
+                        .get_value((row_idx as u32, 5)) // 썸네일 경로 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
 
+                    if !thumbnail_path.is_empty() {
+                        // 상대 경로를 절대 경로로 변환
+                        let absolute_path = std::env::current_dir()?.join(&thumbnail_path);
+                        println!("업로드할 썸네일 경로: {}", absolute_path.display());
+
+                        // 파일 input 요소를 찾고 파일 경로 전송
+                        let file_input = driver.find_element(By::Id("bf_file_1")).await?;
+
+                        // 파일 경로를 문자열로 변환하고 send_keys 실행
+                        if let Some(path_str) = absolute_path.to_str() {
+                            file_input.send_keys(path_str).await?;
+                            // 업로드 후 잠시 대기
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        } else {
+                            println!("파일 경로를 문자열로 변환할 수 없습니다");
+                        }
+                    }
                     // // 파일 업로드 (사진1)
                     // let photo1_path = range
                     //     .get_value((row_idx as u32, 4)) // 사진1 경로 컬럼
@@ -185,36 +223,115 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                     //         .send_keys(&photo1_path)
                     //         .await?;
                     // }
-
-                    // // 사진2 업로드 (에디터 내부)
-                    // let photo2_path = range
-                    //     .get_value((row_idx as u32, 5)) // 사진2 경로 컬럼
+                    // 파일 업로드 (사진1)
+                    // let photo1_path = range
+                    //     .get_value((row_idx as u32, 4)) // 사진1 경로 컬럼
                     //     .map(|v| v.to_string())
                     //     .unwrap_or_default();
 
-                    // if !photo2_path.is_empty() {
-                    //     // iframe으로 전환
-                    //     let editor_frame = driver
-                    //         .find_element(By::Css("iframe[src*='SmartEditor2Skin.html']"))
-                    //         .await?;
-                    //     driver.switch_to().parent_frame().await?;
+                    // if !photo1_path.is_empty() {
+                    //     // 상대 경로를 절대 경로로 변환
+                    //     let absolute_path = std::env::current_dir()?.join(&photo1_path);
+                    //     println!("파일 경로: {}", absolute_path.display()); // 경로 확인용
 
-                    //     // 사진 버튼 클릭
                     //     driver
-                    //         .find_element(By::Css(".se2_photo"))
+                    //         .find_element(By::Id("bf_file_1"))
                     //         .await?
-                    //         .click()
+                    //         .send_keys(absolute_path.to_str().unwrap())
                     //         .await?;
-
-                    //     // 기본 프레임으로 돌아가기
-                    //     driver.switch_to().default_content().await?;
-
-                    //     // 파일 업로드 다이얼로그 처리
-                    //     // Note: 실제 구현은 사이트의 파일 업로드 UI에 따라 달라질 수 있습니다
-                    //     sleep(Duration::from_secs(1)).await;
                     // }
+                    // 사진2 업로드 (에디터 내부)
+                    // 에디터의 이미지 버튼 클릭
+                    // 에디터 iframe 찾기
+                    // 정확한 src 경로로 iframe 찾기
+                    let iframe = driver
+.find_element(By::Css("iframe[src='http://namdongfan.com/plugin/editor/smarteditor2/SmartEditor2Skin.html']"))
+.await?;
 
-                    // // 작성완료 버튼 클릭
+                    println!("Found iframe");
+
+                    // iframe으로 전환
+                    driver.switch_to().frame_element(&iframe).await?;
+
+                    // iframe 로드를 위해 대기
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+
+                    println!("Switched to iframe");
+
+                    // 사진 버튼 찾기
+                    let photo_btn = match driver.find_element(By::ClassName("se2_photo")).await {
+                        Ok(btn) => btn,
+                        Err(_) => {
+                            println!("Trying alternative selector...");
+                            driver.find_element(By::Css("button.se2_photo")).await?
+                        }
+                    };
+
+                    println!("Found photo button, clicking...");
+                    photo_btn.click().await?;
+
+                    // iframe 로드를 위해 대기
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+
+                    println!("Switched to iframe");
+
+                    // 사진 버튼 찾기
+                    let photo_btn = match driver.find_element(By::ClassName("se2_photo")).await {
+                        Ok(btn) => btn,
+                        Err(_) => {
+                            println!("Trying alternative selector...");
+                            driver.find_element(By::Css("button.se2_photo")).await?
+                        }
+                    };
+
+                    println!("Found photo button, clicking...");
+                    photo_btn.click().await?;
+
+                    // 사진 버튼 찾기
+                    let photo_btn = match driver.find_element(By::ClassName("se2_photo")).await {
+                        Ok(btn) => btn,
+                        Err(_) => {
+                            println!("Trying alternative selector...");
+                            driver.find_element(By::Css("button.se2_photo")).await?
+                        }
+                    };
+
+                    println!("Found photo button, clicking...");
+                    photo_btn.click().await?;
+
+                    let image_path = range
+                    .get_value((row_idx as u32, 4)) // 이미지 경로 컬럼
+                    .map(|v| v.to_string())
+                    .unwrap_or_default();
+                
+                if !image_path.is_empty() {
+                    // 파일 업로드 input 찾기
+                    let file_input = driver
+                        .find_element(By::Id("fileupload"))
+                        .await?;
+                        
+                    let absolute_path = std::env::current_dir()?.join(&image_path);
+                    println!("Uploading image from path: {}", absolute_path.display());
+                    
+                    if let Some(path_str) = absolute_path.to_str() {
+                        // 파일 경로 전송
+                        file_input.send_keys(path_str).await?;
+                        
+                        // 파일 선택 후 잠시 대기
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        
+                        // 업로드 버튼 클릭
+                        let upload_btn = driver
+                            .find_element(By::Id("img_upload_submit"))
+                            .await?;
+                        upload_btn.click().await?;
+                        
+                        // 업로드 완료 대기
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+                    }
+                }
+                    // 팝업창이 뜰 때까지 대기
+                    tokio::time::sleep(Duration::from_secs(2)).await;
                     // driver
                     //     .find_element(By::Id("btn_submit"))
                     //     .await?
@@ -317,7 +434,6 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mut main_category_info = Vec::new();
     for category in &main_categories {
-    
         if let (Ok(Some(href)), Ok(name)) =
             (category.get_attribute("href").await, category.text().await)
         {
@@ -341,12 +457,12 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
         driver.goto(main_href).await?;
         tokio::time::sleep(Duration::from_millis(200)).await;
         let names = driver
-        .find_element(By::Css(".pageTit h4"))
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap();
+            .find_element(By::Css(".pageTit h4"))
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
 
         let sub_categories = driver
             .find_elements(By::Css(".category_li > ul > li > a"))
@@ -410,9 +526,7 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 driver.goto(prod_href).await?;
                 tokio::time::sleep(Duration::from_millis(200)).await;
                 let mut main_category = String::new();
-     
 
-                
                 main_category = names.clone();
                 println!("대분류: {}", main_category);
                 // 상세 페이지에서 정보 수집
