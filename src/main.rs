@@ -121,14 +121,14 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .get_value((row_idx as u32, 0)) // 분류 컬럼
                         .map(|v| v.to_string())
                         .unwrap_or_default();
-                    println!("이거다{}",category);
+                    println!("이거다{}", category);
                     // 카테고리 선택 - select 요소의 options를 찾아서 매칭되는 텍스트의 option을 선택
                     let select = driver.find_element(By::Id("ca_name")).await?;
                     let options = select.find_elements(By::Tag("option")).await?;
 
                     for option in options {
                         let option_text = option.text().await?;
-                        println!("{}",option_text);
+                        println!("{}", option_text);
 
                         if option_text == category {
                             option.click().await?;
@@ -293,12 +293,13 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut sheet = workbook.add_worksheet(None)?;
 
     // 헤더 작성
-    sheet.write_string(0, 0, "분류", None)?;
-    sheet.write_string(0, 1, "제목", None)?;
-    sheet.write_string(0, 2, "제품특징", None)?;
-    sheet.write_string(0, 3, "사용장소", None)?;
-    sheet.write_string(0, 4, "사진1", None)?;
-    sheet.write_string(0, 5, "사진2", None)?;
+    sheet.write_string(0, 0, "대분류", None)?; // 대분류 컬럼 추가
+    sheet.write_string(0, 1, "세부분류", None)?;
+    sheet.write_string(0, 2, "제목", None)?;
+    sheet.write_string(0, 3, "제품특징", None)?;
+    sheet.write_string(0, 4, "사용장소", None)?;
+    sheet.write_string(0, 5, "사진1", None)?;
+    sheet.write_string(0, 6, "사진2", None)?;
 
     let mut row = 1; // 데이터는 1행부터 시작
 
@@ -308,7 +309,7 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let main_url = format!("{}/list.asp", base_url);
     driver.goto(&main_url).await?;
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
     let main_categories = driver
         .find_elements(By::Css(".depth2.menu2 > li > a"))
@@ -316,6 +317,7 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mut main_category_info = Vec::new();
     for category in &main_categories {
+    
         if let (Ok(Some(href)), Ok(name)) =
             (category.get_attribute("href").await, category.text().await)
         {
@@ -337,7 +339,14 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
         );
 
         driver.goto(main_href).await?;
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let names = driver
+        .find_element(By::Css(".pageTit h4"))
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
 
         let sub_categories = driver
             .find_elements(By::Css(".category_li > ul > li > a"))
@@ -366,7 +375,7 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
             );
 
             driver.goto(sub_href).await?;
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_millis(200)).await;
 
             let products = driver
                 .find_elements(By::Css("ul.clearfix > li > a"))
@@ -399,8 +408,13 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 println!("URL: {}", prod_href);
 
                 driver.goto(prod_href).await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                let mut main_category = String::new();
+     
 
+                
+                main_category = names.clone();
+                println!("대분류: {}", main_category);
                 // 상세 페이지에서 정보 수집
                 let mut category = String::new();
                 let mut name = String::new();
@@ -475,17 +489,18 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 }
 
                 // 엑셀에 데이터 저장
-                sheet.write_string(row, 0, &category, None)?;
-                sheet.write_string(row, 1, &name, None)?;
-                sheet.write_string(row, 2, &features, None)?;
-                sheet.write_string(row, 3, &usage, None)?;
-                sheet.write_string(row, 4, &image1_path, None)?;
-                sheet.write_string(row, 5, &image2_path, None)?;
+                sheet.write_string(row, 0, &main_category, None)?; // 대분류
+                sheet.write_string(row, 1, &category, None)?;
+                sheet.write_string(row, 2, &name, None)?; // 제목
+                sheet.write_string(row, 3, &features, None)?; // 제품특징
+                sheet.write_string(row, 4, &usage, None)?; // 사용장소
+                sheet.write_string(row, 5, &image1_path, None)?; // 사진1
+                sheet.write_string(row, 6, &image2_path, None)?; // 사진2
 
                 row += 1;
 
                 driver.goto(sub_href).await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_millis(200)).await;
             }
         }
     }
@@ -495,34 +510,6 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 
-// fn save_to_excel(product: &ProductInfo, file_path: &str) -> Result<(), Box<dyn Error>> {
-//     let mut workbook = if Path::new(file_path).exists() {
-//         Workbook::open(file_path)?
-//     } else {
-//         Workbook::create(file_path)?
-//     };
-
-//     let sheet = workbook.worksheet_mut("Products")?;
-
-//     // 헤더 추가 (첫 번째 행이 비어있는 경우)
-//     if sheet.is_empty() {
-//         sheet.write_row(&["분류", "제목", "제품특징", "사용장소", "사진1", "사진2"])?;
-//     }
-
-//     // 데이터 추가
-//     let row = sheet.rows() + 1;
-//     sheet.write_row_at(row, &[
-//         &product.category,
-//         &product.name,
-//         &product.features,
-//         &product.usage,
-//         &product.image1,
-//         &product.image2,
-//     ])?;
-
-//     workbook.save(file_path)?;
-//     Ok(())
-// }
 async fn download_image(url: &str, path: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
     let response = reqwest::get(url).await?;
     let bytes = response.bytes().await?;
