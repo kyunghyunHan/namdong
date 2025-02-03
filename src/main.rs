@@ -93,7 +93,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 .click()
                 .await?;
 
-            sleep(Duration::from_secs(1)).await; // 로그인 처리 대기
+            tokio::time::sleep(Duration::from_millis(200)).await;
             driver
                 .goto(format!("{SITE_ADRESS}/bbs/board.php?bo_table=product"))
                 .await?;
@@ -126,7 +126,6 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .get_value((row_idx as u32, 1)) // 분류 컬럼
                         .map(|v| v.to_string())
                         .unwrap_or_default();
-                    println!("이거다{}", category);
                     // 카테고리 선택 - select 요소의 options를 찾아서 매칭되는 텍스트의 option을 선택
                     let select = driver.find_element(By::Id("ca_name")).await?;
                     let options = select.find_elements(By::Tag("option")).await?;
@@ -210,40 +209,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             println!("파일 경로를 문자열로 변환할 수 없습니다");
                         }
                     }
-                    // // 파일 업로드 (사진1)
-                    // let photo1_path = range
-                    //     .get_value((row_idx as u32, 4)) // 사진1 경로 컬럼
-                    //     .map(|v| v.to_string())
-                    //     .unwrap_or_default();
 
-                    // if !photo1_path.is_empty() {
-                    //     driver
-                    //         .find_element(By::Id("bf_file_1"))
-                    //         .await?
-                    //         .send_keys(&photo1_path)
-                    //         .await?;
-                    // }
-                    // 파일 업로드 (사진1)
-                    // let photo1_path = range
-                    //     .get_value((row_idx as u32, 4)) // 사진1 경로 컬럼
-                    //     .map(|v| v.to_string())
-                    //     .unwrap_or_default();
-
-                    // if !photo1_path.is_empty() {
-                    //     // 상대 경로를 절대 경로로 변환
-                    //     let absolute_path = std::env::current_dir()?.join(&photo1_path);
-                    //     println!("파일 경로: {}", absolute_path.display()); // 경로 확인용
-
-                    //     driver
-                    //         .find_element(By::Id("bf_file_1"))
-                    //         .await?
-                    //         .send_keys(absolute_path.to_str().unwrap())
-                    //         .await?;
-                    // }
-                    // 사진2 업로드 (에디터 내부)
-                    // 에디터의 이미지 버튼 클릭
-                    // 에디터 iframe 찾기
-                    // 정확한 src 경로로 iframe 찾기
                     let iframe = driver
 .find_element(By::Css("iframe[src='http://namdongfan.com/plugin/editor/smarteditor2/SmartEditor2Skin.html']"))
 .await?;
@@ -270,76 +236,71 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                     println!("Found photo button, clicking...");
                     photo_btn.click().await?;
 
-                    // iframe 로드를 위해 대기
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-
-                    println!("Switched to iframe");
-
                     // 사진 버튼 찾기
-                    let photo_btn = match driver.find_element(By::ClassName("se2_photo")).await {
-                        Ok(btn) => btn,
-                        Err(_) => {
-                            println!("Trying alternative selector...");
-                            driver.find_element(By::Css("button.se2_photo")).await?
-                        }
-                    };
 
-                    println!("Found photo button, clicking...");
                     photo_btn.click().await?;
-
-                    // 사진 버튼 찾기
-                    let photo_btn = match driver.find_element(By::ClassName("se2_photo")).await {
-                        Ok(btn) => btn,
-                        Err(_) => {
-                            println!("Trying alternative selector...");
-                            driver.find_element(By::Css("button.se2_photo")).await?
-                        }
-                    };
-
-                    println!("Found photo button, clicking...");
-                    photo_btn.click().await?;
-
                     let image_path = range
-                    .get_value((row_idx as u32, 4)) // 이미지 경로 컬럼
-                    .map(|v| v.to_string())
-                    .unwrap_or_default();
-                
-                if !image_path.is_empty() {
-                    // 파일 업로드 input 찾기
-                    let file_input = driver
-                        .find_element(By::Id("fileupload"))
-                        .await?;
-                        
-                    let absolute_path = std::env::current_dir()?.join(&image_path);
-                    println!("Uploading image from path: {}", absolute_path.display());
-                    
-                    if let Some(path_str) = absolute_path.to_str() {
-                        // 파일 경로 전송
-                        file_input.send_keys(path_str).await?;
-                        
-                        // 파일 선택 후 잠시 대기
-                        tokio::time::sleep(Duration::from_secs(2)).await;
-                        
-                        // 업로드 버튼 클릭
-                        let upload_btn = driver
-                            .find_element(By::Id("img_upload_submit"))
+                        .get_value((row_idx as u32, 6)) // 이미지 경로 컬럼
+                        .map(|v| v.to_string())
+                        .unwrap_or_default();
+                    let handles = driver.window_handles().await?;
+                    let main_handle = handles.first().unwrap().clone();
+                    if !image_path.is_empty() {
+                        // 팝업창이 뜰 때까지 대기
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+
+                        // 팝업 창으로 전환
+                        let handles = driver.window_handles().await?;
+                        let popup_handle = handles.last().unwrap();
+                        driver.switch_to().window(popup_handle.clone()).await?;
+
+                        // 파일 선택 버튼 찾기
+                        let file_select_button = driver
+                            .find_element(By::Css("span.fileinput-button"))
                             .await?;
-                        upload_btn.click().await?;
-                        
-                        // 업로드 완료 대기
+
+                        // 파일 선택 버튼 클릭
+                        file_select_button.click().await?;
+
+                        // 파일 선택 대화상자가 열릴 때까지 대기
                         tokio::time::sleep(Duration::from_secs(2)).await;
+
+                        // 파일 경로 전송
+                        let absolute_path = std::env::current_dir()?.join(&image_path);
+                        println!("Uploading image from path: {}", absolute_path.display());
+
+                        if let Some(path_str) = absolute_path.to_str() {
+                            // 파일 업로드 input 요소 찾기
+                            let file_input = driver.find_element(By::Id("fileupload")).await?;
+                            println!("{}", path_str);
+                            // 파일 경로 입력
+                            file_input.send_keys(path_str).await?;
+
+                            // 파일 선택 후 잠시 대기
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+
+                            // 등록 버튼 클릭
+                            let upload_btn =
+                                driver.find_element(By::Id("img_upload_submit")).await?;
+                            upload_btn.click().await?;
+                        }
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+
+                        // 팝업 창 닫기
+                        driver.close().await?;
                     }
-                }
-                    // 팝업창이 뜰 때까지 대기
-                    tokio::time::sleep(Duration::from_secs(2)).await;
-                    // driver
-                    //     .find_element(By::Id("btn_submit"))
-                    //     .await?
-                    //     .click()
-                    //     .await?;
+                    // 저장해둔 핸들을 사용하여 기존 창으로 전환
+                    driver.switch_to().window(main_handle).await?;
+
+                    // 제품 등록 버튼 클릭
+                    driver
+                        .find_element(By::Id("btn_submit"))
+                        .await?
+                        .click()
+                        .await?;
 
                     // 다음 제품 입력을 위해 대기
-                    sleep(Duration::from_secs(10)).await;
+                    sleep(Duration::from_secs(1)).await;
                 }
             }
         }
