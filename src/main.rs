@@ -6,8 +6,6 @@ use eframe::egui;
 use std::env;
 use std::error::Error;
 use std::fs;
-use std::path::Path;
-
 use std::thread;
 use std::time::Duration;
 use thirtyfour::prelude::*;
@@ -18,6 +16,8 @@ const WINDOW_DRIVER: &str = "./driver/chromedriver.exe";
 const MAC_DRIVER: &str = "./driver/chromedriver";
 
 const TYPE: &str = "MAC";
+
+const SITE_ADRESS: &str = "http://namdongfan.com";
 fn main() -> eframe::Result<()> {
     // if let Ok(exe_path) = std::env::current_exe() {
     //     if let Some(exe_dir) = exe_path.parent() {
@@ -59,7 +59,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
     driver
-        .goto("https://ikor250113s.mycafe24.com/bbs/board.php?bo_table=product")
+        .goto(format!("{SITE_ADRESS}/bbs/board.php?bo_table=product"))
         .await?;
 
     match driver.find_element(By::ClassName("adminLi")).await {
@@ -67,7 +67,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
             println!("이미 관리자 페이지입니다");
         }
         Err(_) => {
-            driver.goto("https://ikor250113s.mycafe24.com/adm").await?;
+            driver.goto(format!("{SITE_ADRESS}/adm")).await?;
             let admin_id = env::var("ADMIN_ID").expect("ADMIN_ID must be set");
             let admin_pw = env::var("ADMIN_PW").expect("ADMIN_PW must be set");
 
@@ -95,7 +95,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
             sleep(Duration::from_secs(1)).await; // 로그인 처리 대기
             driver
-                .goto("https://ikor250113s.mycafe24.com/bbs/board.php?bo_table=product")
+                .goto(format!("{SITE_ADRESS}/bbs/board.php?bo_table=product"))
                 .await?;
             sleep(Duration::from_secs(1)).await; // 로그인 처리 대기
 
@@ -125,7 +125,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
 
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(2)).await;
 
     driver.quit().await?;
 
@@ -141,7 +141,6 @@ impl Default for MyApp {
         }
     }
 }
-
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
