@@ -285,9 +285,6 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             upload_btn.click().await?;
                         }
                         tokio::time::sleep(Duration::from_secs(2)).await;
-
-                        // 팝업 창 닫기
-                        driver.close().await?;
                     }
                     // 저장해둔 핸들을 사용하여 기존 창으로 전환
                     driver.switch_to().window(main_handle).await?;
@@ -300,6 +297,10 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .await?;
 
                     // 다음 제품 입력을 위해 대기
+                    sleep(Duration::from_secs(1)).await;
+                    driver
+                        .goto(format!("{SITE_ADRESS}/bbs/write.php?bo_table=product"))
+                        .await?;
                     sleep(Duration::from_secs(1)).await;
                 }
             }
