@@ -19,11 +19,11 @@ const TYPE: &str = "MAC";
 
 const SITE_ADRESS: &str = "http://namdongfan.com";
 fn main() -> eframe::Result<()> {
-    // if let Ok(exe_path) = std::env::current_exe() {
-    //     if let Some(exe_dir) = exe_path.parent() {
-    //         std::env::set_current_dir(exe_dir).ok();
-    //     }
-    // }
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            std::env::set_current_dir(exe_dir).ok();
+        }
+    }
     dotenv().ok(); // .env 파일 로드
 
     let app = MyApp::default();
@@ -105,16 +105,21 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 .click()
                 .await?;
 
-            // Excel 파일 읽기
             if let Ok(current_dir) = env::current_dir() {
                 println!("Current directory: {}", current_dir.display());
             }
+            println!("Step 1: Waiting for login");
+
             let path = "./data/products.xlsx"; // 현재 디렉토리의 파일 지정
+                println!("Step 2: Waiting for login");
 
             let mut workbook: Xlsx<_> = open_workbook(path)?;
+            println!("Step 3: Waiting for login");
 
             if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
                 // 각 제품에 대해 처리
+                println!("Step 4: Waiting for login");
+
                 for row_idx in 1..range.height() {
                     // 카테고리 선택
                     let category = range
@@ -307,7 +312,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
         }
     }
 
-    sleep(Duration::from_secs(2)).await;
+    sleep(Duration::from_secs(1)).await;
 
     driver.quit().await?;
 
