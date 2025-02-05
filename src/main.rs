@@ -118,7 +118,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
             if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
                 // 각 제품에 대해 처리
 
-                for row_idx in 1..range.height() {
+                for row_idx in 232..range.height() {
                     // 카테고리 선택
                     let category = range
                         .get_value((row_idx as u32, 0)) // 분류 컬럼
@@ -266,7 +266,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         file_select_button.click().await?;
 
                         // 파일 선택 대화상자가 열릴 때까지 대기
-                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        tokio::time::sleep(Duration::from_millis(500)).await;
 
                         // 파일 경로 전송
                         let absolute_path = std::env::current_dir()?.join(&image_path);
@@ -280,14 +280,14 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             file_input.send_keys(path_str).await?;
 
                             // 파일 선택 후 잠시 대기
-                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            tokio::time::sleep(Duration::from_secs(1)).await;
 
                             // 등록 버튼 클릭
                             let upload_btn =
                                 driver.find_element(By::Id("img_upload_submit")).await?;
                             upload_btn.click().await?;
                         }
-                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        tokio::time::sleep(Duration::from_millis(1000)).await;
                     }
                     // 저장해둔 핸들을 사용하여 기존 창으로 전환
                     driver.switch_to().window(main_handle).await?;
@@ -300,11 +300,11 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .await?;
 
                     // 다음 제품 입력을 위해 대기
-                    sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_millis(200)).await;
                     driver
                         .goto(format!("{SITE_ADRESS}/bbs/write.php?bo_table=product"))
                         .await?;
-                    sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::from_millis(200)).await;
                 }
             }
         }
