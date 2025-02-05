@@ -602,11 +602,6 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 async fn download_image(url: &str, path: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
     let response = reqwest::get(url).await?;
     let bytes = response.bytes().await?;
-    
-    // 이미지 처리 추가
-    let img = image::load_from_memory(&bytes)?;
-    let img = img.into_luma8(); // 또는 .into_rgb8()
-    img.save(path)?;
-    
+    fs::write(path, bytes)?;
     Ok(())
 }
