@@ -117,7 +117,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
             if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
                 // 각 제품에 대해 처리
 
-                for row_idx in 1..range.height() {
+                for row_idx in 313..range.height() {
                     // 카테고리 선택
                     let category = range
                         .get_value((row_idx as u32, 0)) // 분류 컬럼
@@ -247,7 +247,15 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .unwrap_or_default();
                     let handles = driver.window_handles().await?;
                     let main_handle = handles.first().unwrap().clone();
-                    if !image_path.is_empty() {
+                    if image_path.is_empty() || image_path.trim().is_empty() {
+                        println!("이미지 경로가 비어있음, 빈 공백 삽입");
+                        let script = r#"
+                            var p = document.createElement('p');
+                            p.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+                            document.body.appendChild(p);
+                        "#;
+                        driver.execute(script, vec![]).await?;
+                    } else {
                         // 팝업창이 뜰 때까지 대기
                         tokio::time::sleep(Duration::from_secs(1)).await;
 
@@ -287,15 +295,8 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             upload_btn.click().await?;
                         }
                         tokio::time::sleep(Duration::from_millis(1000)).await;
-                    } else {
-                        // 이미지가 없는 경우 6개의 공백 문자를 가진 p 태그 삽입
-                        let script = r#"
-    var p = document.createElement('p');
-    p.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
-    document.body.appendChild(p);
-"#;
-                        driver.execute(script, vec![]).await?; // execute_script 대신 execute 사용, 빈 벡터 전달
                     }
+
                     // 저장해둔 핸들을 사용하여 기존 창으로 전환
                     driver.switch_to().window(main_handle).await?;
 
@@ -673,5 +674,21 @@ async fn download_image(url: &str, path: &str) -> Result<(), Box<dyn Error + Sen
     let response = reqwest::get(url).await?;
     let bytes = response.bytes().await?;
     fs::write(path, bytes)?;
+    Ok(())
+}
+
+pub async fn remove_data() -> Result<(), Box<dyn Error + Send + Sync>> {
+    start_chromedriver().await?;
+
+    let mut caps = DesiredCapabilities::chrome();
+    caps.set_no_sandbox()?;
+
+    let driver = WebDriver::new("http://localhost:9515", caps).await?;
+    driver
+        .goto(format!("{SITE_ADRESS}/bbs/board.php?bo_table=product"))
+        .await?;
+
+
+
     Ok(())
 }
