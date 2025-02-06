@@ -7,7 +7,6 @@ use std::env;
 use std::error::Error;
 use std::fs;
 use std::thread;
-use image::DynamicImage;
 
 use std::time::Duration;
 use thirtyfour::prelude::*;
@@ -95,7 +94,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                 .click()
                 .await?;
 
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            tokio::time::sleep(Duration::from_millis(400)).await;
             driver
                 .goto(format!("{SITE_ADRESS}/bbs/board.php?bo_table=product"))
                 .await?;
@@ -118,7 +117,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
             if let Some(Ok(range)) = workbook.worksheet_range_at(0) {
                 // 각 제품에 대해 처리
 
-                for row_idx in 232..range.height() {
+                for row_idx in 1..range.height() {
                     // 카테고리 선택
                     let category = range
                         .get_value((row_idx as u32, 0)) // 분류 컬럼
@@ -142,7 +141,7 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             break;
                         }
                     }
-                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    tokio::time::sleep(Duration::from_millis(400)).await;
                     let select = driver.find_element(By::Id("wr_1")).await?;
                     let options = select.find_elements(By::Tag("option")).await?;
                     for option in options {
@@ -288,6 +287,14 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                             upload_btn.click().await?;
                         }
                         tokio::time::sleep(Duration::from_millis(1000)).await;
+                    } else {
+                        // 이미지가 없는 경우 6개의 공백 문자를 가진 p 태그 삽입
+                        let script = r#"
+    var p = document.createElement('p');
+    p.innerHTML = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+    document.body.appendChild(p);
+"#;
+                        driver.execute(script, vec![]).await?; // execute_script 대신 execute 사용, 빈 벡터 전달
                     }
                     // 저장해둔 핸들을 사용하여 기존 창으로 전환
                     driver.switch_to().window(main_handle).await?;
@@ -300,11 +307,11 @@ pub async fn example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         .await?;
 
                     // 다음 제품 입력을 위해 대기
-                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    tokio::time::sleep(Duration::from_millis(400)).await;
                     driver
                         .goto(format!("{SITE_ADRESS}/bbs/write.php?bo_table=product"))
                         .await?;
-                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    tokio::time::sleep(Duration::from_millis(400)).await;
                 }
             }
         }
@@ -364,8 +371,8 @@ impl eframe::App for MyApp {
         });
     }
 }
-
 pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
+    println!("크롤링 시작...");
     start_chromedriver().await?;
     let mut caps = DesiredCapabilities::chrome();
     caps.set_no_sandbox()?;
@@ -375,7 +382,7 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut sheet = workbook.add_worksheet(None)?;
 
     // 헤더 작성
-    sheet.write_string(0, 0, "대분류", None)?; // 대분류 컬럼 추가
+    sheet.write_string(0, 0, "대분류", None)?;
     sheet.write_string(0, 1, "세부분류", None)?;
     sheet.write_string(0, 2, "제목", None)?;
     sheet.write_string(0, 3, "제품특징", None)?;
@@ -383,13 +390,14 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
     sheet.write_string(0, 5, "사진1", None)?;
     sheet.write_string(0, 6, "사진2", None)?;
 
-    let mut row = 1; // 데이터는 1행부터 시작
+    let mut row = 1;
 
     let driver = WebDriver::new("http://localhost:9515", caps).await?;
     let domain = "http://www.dongkun.com";
     let base_url = format!("{}/ko/sub/product", domain);
-
     let main_url = format!("{}/list.asp", base_url);
+
+    // 메인 페이지 로드
     driver.goto(&main_url).await?;
     tokio::time::sleep(Duration::from_millis(200)).await;
 
@@ -399,15 +407,20 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let mut main_category_info = Vec::new();
     for category in &main_categories {
-        if let (Ok(Some(href)), Ok(name)) =
-            (category.get_attribute("href").await, category.text().await)
-        {
-            let full_href = if href.starts_with("/") {
-                format!("{}{}", domain, href)
-            } else {
-                href.to_string()
-            };
-            main_category_info.push((full_href, name.to_string()));
+        match (category.get_attribute("href").await, category.text().await) {
+            (Ok(Some(href)), Ok(name)) => {
+                let full_href = if href.starts_with("/") {
+                    format!("{}{}", domain, href)
+                } else {
+                    href.to_string()
+                };
+                println!("메인 카테고리 발견: {}", name);
+                main_category_info.push((full_href, name.to_string()));
+            }
+            _ => {
+                println!("카테고리 정보 추출 실패");
+                continue;
+            }
         }
     }
 
@@ -421,30 +434,51 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
         driver.goto(main_href).await?;
         tokio::time::sleep(Duration::from_millis(200)).await;
-        let names = driver
-            .find_element(By::Css(".pageTit h4"))
-            .await
-            .unwrap()
-            .text()
-            .await
-            .unwrap();
 
-        let sub_categories = driver
-            .find_elements(By::Css(".category_li > ul > li > a"))
-            .await?;
+        let names = match driver.find_element(By::Css(".pageTit h4")).await {
+            Ok(element) => match element.text().await {
+                Ok(text) => text,
+                Err(_) => {
+                    println!("타이틀 텍스트 추출 실패");
+                    continue;
+                }
+            },
+            Err(_) => {
+                println!("타이틀 요소를 찾을 수 없음");
+                continue;
+            }
+        };
+
+        // 서브 카테고리 확인
+        let has_sub_categories = driver.find_element(By::Css(".category_li")).await.is_ok();
 
         let mut sub_category_info = Vec::new();
-        for category in &sub_categories {
-            if let (Ok(Some(href)), Ok(name)) =
-                (category.get_attribute("href").await, category.text().await)
+
+        if has_sub_categories {
+            // 서브 카테고리가 있는 경우
+            if let Ok(sub_categories) = driver
+                .find_elements(By::Css(".category_li > ul > li > a"))
+                .await
             {
-                let full_href = if href.starts_with("/") {
-                    format!("{}{}", domain, href)
-                } else {
-                    href.to_string()
-                };
-                sub_category_info.push((full_href, name.to_string()));
+                for category in &sub_categories {
+                    if let (Ok(Some(href)), Ok(name)) =
+                        (category.get_attribute("href").await, category.text().await)
+                    {
+                        let full_href = if href.starts_with("/") {
+                            format!("{}{}", domain, href)
+                        } else {
+                            href.to_string()
+                        };
+                        sub_category_info.push((full_href, name.to_string()));
+                    }
+                }
             }
+        }
+
+        // 서브 카테고리가 없거나 찾지 못한 경우, 대분류 URL을 그대로 사용
+        if sub_category_info.is_empty() {
+            println!("서브 카테고리 없음, 대분류로 처리: {}", names);
+            sub_category_info.push((main_href.clone(), names.clone()));
         }
 
         for (sub_index, (sub_href, sub_name)) in sub_category_info.iter().enumerate() {
@@ -458,9 +492,13 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
             driver.goto(sub_href).await?;
             tokio::time::sleep(Duration::from_millis(200)).await;
 
-            let products = driver
-                .find_elements(By::Css("ul.clearfix > li > a"))
-                .await?;
+            let products = match driver.find_elements(By::Css("ul.clearfix > li > a")).await {
+                Ok(elements) => elements,
+                Err(e) => {
+                    println!("제품 목록을 찾을 수 없음: {:?}", e);
+                    continue;
+                }
+            };
 
             let mut product_info = Vec::new();
             for product in &products {
@@ -490,11 +528,12 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
 
                 driver.goto(prod_href).await?;
                 tokio::time::sleep(Duration::from_millis(200)).await;
-                let mut main_category = String::new();
 
-                main_category = names.clone();
+                let main_category = names.clone();
                 println!("대분류: {}", main_category);
-                // 상세 페이지에서 정보 수집
+
+                // 상세 정보 수집 전 대기
+
                 let mut category = String::new();
                 let mut name = String::new();
                 if let Ok(title_div) = driver.find_element(By::Css(".title")).await {
@@ -510,8 +549,18 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                     }
                 }
 
+                // 필수 데이터 검증
+                if main_category.is_empty() || category.is_empty() || name.is_empty() {
+                    println!(
+                        "필수 데이터 누락: {} / {} / {}",
+                        main_category, category, name
+                    );
+                    continue;
+                }
+
                 let mut features = String::new();
                 let mut usage = String::new();
+
                 if let Ok(info_div) = driver.find_element(By::Css(".info")).await {
                     let dls = info_div.find_elements(By::Tag("dl")).await?;
                     for dl in dls {
@@ -520,7 +569,6 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 if text.contains("제품특징") {
                                     if let Ok(dd) = dl.find_element(By::Tag("dd")).await {
                                         if let Ok(feature_text) = dd.text().await {
-                                            // 각 줄 앞에 "※" 추가
                                             features = feature_text
                                                 .split('\n')
                                                 .map(|line| format!("※ {}", line.trim()))
@@ -531,7 +579,6 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                                 } else if text.contains("제품 사용장소") {
                                     if let Ok(dd) = dl.find_element(By::Tag("dd")).await {
                                         if let Ok(usage_text) = dd.text().await {
-                                            // 각 줄 앞에 "※" 추가
                                             usage = usage_text
                                                 .split('\n')
                                                 .map(|line| format!("※ {}", line.trim()))
@@ -559,8 +606,13 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         let file_name = src.split('/').last().unwrap_or("image1.jpg");
                         let save_path = format!("{}/1_{}", img_folder, file_name);
 
-                        download_image(&full_url, &save_path).await?;
-                        image1_path = save_path;
+                        match download_image(&full_url, &save_path).await {
+                            Ok(_) => {
+                                println!("이미지1 다운로드 성공: {}", save_path);
+                                image1_path = save_path;
+                            }
+                            Err(e) => println!("이미지1 다운로드 실패: {:?}", e),
+                        }
                     }
                 }
 
@@ -572,20 +624,35 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
                         let file_name = src.split('/').last().unwrap_or("image2.jpg");
                         let save_path = format!("{}/2_{}", img_folder, file_name);
 
-                        download_image(&full_url, &save_path).await?;
-                        image2_path = save_path;
+                        match download_image(&full_url, &save_path).await {
+                            Ok(_) => {
+                                println!("이미지2 다운로드 성공: {}", save_path);
+                                image2_path = save_path;
+                            }
+                            Err(e) => println!("이미지2 다운로드 실패: {:?}", e),
+                        }
                     }
                 }
 
                 // 엑셀에 데이터 저장
-                sheet.write_string(row, 0, &main_category, None)?; // 대분류
-                sheet.write_string(row, 1, &category, None)?;
-                sheet.write_string(row, 2, &name, None)?; // 제목
-                sheet.write_string(row, 3, &features, None)?; // 제품특징
-                sheet.write_string(row, 4, &usage, None)?; // 사용장소
-                sheet.write_string(row, 5, &image1_path, None)?; // 사진1
-                sheet.write_string(row, 6, &image2_path, None)?; // 사진2
+                sheet.write_string(row, 0, &names, None)?; // 대분류
+                sheet.write_string(
+                    row,
+                    1,
+                    if has_sub_categories {
+                        &sub_name
+                    } else {
+                        &names
+                    },
+                    None,
+                )?; // 세부분류
+                sheet.write_string(row, 2, &name, None)?;
+                sheet.write_string(row, 3, &features, None)?;
+                sheet.write_string(row, 4, &usage, None)?;
+                sheet.write_string(row, 5, &image1_path, None)?;
+                sheet.write_string(row, 6, &image2_path, None)?;
 
+                println!("데이터 저장 완료: row {}", row);
                 row += 1;
 
                 driver.goto(sub_href).await?;
@@ -593,9 +660,12 @@ pub async fn dongkun_example() -> Result<(), Box<dyn Error + Send + Sync>> {
             }
         }
     }
+
+    println!("작업 완료. 엑셀 파일 저장 중...");
     workbook.close()?;
 
     driver.quit().await?;
+    println!("크롤링 완료!");
     Ok(())
 }
 
